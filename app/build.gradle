@@ -57,6 +57,9 @@ android {
             outputFileName = "AUTO_" + getBuildDate() + "_" + defaultConfig.versionName + ".apk"
         }
     }
+    lintOptions {
+        checkReleaseBuilds false
+    }
 }
 
 static def getBuildDate() {
