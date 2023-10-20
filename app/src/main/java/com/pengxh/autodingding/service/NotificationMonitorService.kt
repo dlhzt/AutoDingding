@@ -22,7 +22,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.UUID
-
+import android.os.PowerManager
+import android.content.Context
+import android.app.KeyguardManager
 /**
  * @description: 状态栏监听服务
  * @author: Pengxh
@@ -34,6 +36,20 @@ class NotificationMonitorService : NotificationListenerService() {
     private val kTag = "MonitorService"
     private val historyRecordBeanDao by lazy { BaseApplication.get().daoSession.historyRecordBeanDao }
     private val notificationBeanDao by lazy { BaseApplication.get().daoSession.notificationBeanDao }
+
+    //尝试自动解锁
+    private val pm by lazy { getSystemService(Context.POWER_SERVICE) as PowerManager }
+    private var wakeLock: PowerManager.WakeLock =
+        (getSystemService(Context.POWER_SERVICE) as PowerManager).run {
+            newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "MyApp::MyWakelockTag").apply {
+                acquire()
+            }
+        }
+    private val km by lazy {getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager }
+    private var keyguardLock = km.newKeyguardLock("");
+    private var isMeUnLock = false
+
+
 
     /**
      * 有可用的并且和通知管理器连接成功时回调
@@ -86,6 +102,8 @@ class NotificationMonitorService : NotificationListenerService() {
                     )
                     intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
                     startActivity(intent)
+                    Log.d(kTag,"准备锁屏")
+                    autoLock()
                 }
             }
         }
@@ -103,4 +121,42 @@ class NotificationMonitorService : NotificationListenerService() {
             requestRebind(ComponentName(this, NotificationListenerService::class.java))
         }
     }
+
+    fun autoUnlock() {
+        if (!pm.isScreenOn) {
+            wakeLock!!.acquire()
+            Log.d(kTag, "onAccessibilityEvent: 亮屏")
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1) {
+            if (km.isDeviceLocked()) {
+                Log.d(kTag, "autoUnlock: sdk >= 22: 屏幕被密码锁柱")
+                wakeLock!!.release()
+            } else {
+                if (km.inKeyguardRestrictedInputMode()) {
+                    keyguardLock.disableKeyguard()
+                    Log.d(kTag,"onAccessibilityEvent: 尝试解锁"
+                    )
+                    isMeUnLock = true
+                }
+            }
+        }
+    }
+
+    fun autoLock() {
+//        if (isMeUnLock) {
+            try {
+                Thread.sleep(1000)
+            } catch (e: InterruptedException) {
+                e.printStackTrace()
+            }
+            keyguardLock.reenableKeyguard()
+            Log.d(kTag, "autoLock: 自动锁")
+            if (wakeLock != null && pm.isScreenOn) {
+                wakeLock.release()
+                Log.d(kTag, "autoLock: 自动灭")
+            }
+            isMeUnLock = false
+//        }
+    }
+
 }
