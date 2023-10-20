@@ -19,6 +19,9 @@ import com.pengxh.kt.lite.extensions.convertColor
 import com.pengxh.kt.lite.extensions.dp2px
 import com.pengxh.kt.lite.utils.ImmerseStatusBarUtil
 import com.pengxh.kt.lite.utils.WeakReferenceHandler
+import com.pengxh.kt.lite.widget.EasyPopupWindow
+import com.pengxh.kt.lite.widget.dialog.AlertControlDialog
+import com.pengxh.kt.lite.widget.dialog.AlertMessageDialog
 
 class NoticeRecordActivity : KotlinBaseActivity<ActivityNoticeBinding>() {
 
@@ -31,6 +34,10 @@ class NoticeRecordActivity : KotlinBaseActivity<ActivityNoticeBinding>() {
     private var isLoadMore = false
     private var offset = 0 // 本地数据库分页从0开始
 
+    private lateinit var easyPopupWindow: EasyPopupWindow
+    private val titles = arrayOf("删除记录")
+    private val images = intArrayOf(R.drawable.ic_delete)
+
     override fun initViewBinding(): ActivityNoticeBinding {
         return ActivityNoticeBinding.inflate(layoutInflater)
     }
@@ -40,17 +47,68 @@ class NoticeRecordActivity : KotlinBaseActivity<ActivityNoticeBinding>() {
             this, R.color.colorAppThemeLight.convertColor(this)
         )
         ImmersionBar.with(this).statusBarDarkFont(false).init()
-        binding.titleInclude.titleView.text = "所有通知"
+
+        binding.titleView.text = "所有通知"
+        binding.titleRightView.setOnClickListener {
+            easyPopupWindow.showAsDropDown(binding.titleRightView, 0, 10f.dp2px(context))
+        }
     }
 
     override fun initOnCreate(savedInstanceState: Bundle?) {
         weakReferenceHandler = WeakReferenceHandler(callback)
         dataBeans = queryNotificationRecord()
         weakReferenceHandler.sendEmptyMessage(2022061901)
+
+        easyPopupWindow = EasyPopupWindow(this)
+        easyPopupWindow.setPopupMenuItem(images, titles)
+        easyPopupWindow.setOnPopupWindowClickListener(object :
+            EasyPopupWindow.OnPopupWindowClickListener {
+            override fun onPopupItemClicked(position: Int) {
+                when (position) {
+                    0 -> {
+                        if (dataBeans.size == 0) {
+                            AlertMessageDialog.Builder()
+                                .setContext(context)
+                                .setTitle("温馨提示")
+                                .setMessage("空空如也，无法删除")
+                                .setPositiveButton("确定")
+                                .setOnDialogButtonClickListener(
+                                    object : AlertMessageDialog.OnDialogButtonClickListener {
+                                        override fun onConfirmClick() {
+
+                                        }
+                                    }
+                                ).build().show()
+                        } else {
+                            AlertControlDialog.Builder()
+                                .setContext(context)
+                                .setTitle("温馨提示")
+                                .setMessage("是否确定清除所有通知？")
+                                .setNegativeButton("取消")
+                                .setPositiveButton("确定")
+                                .setOnDialogButtonClickListener(object :
+                                    AlertControlDialog.OnDialogButtonClickListener {
+                                    override fun onConfirmClick() {
+                                        notificationBeanDao.deleteAll()
+                                        dataBeans.clear()
+                                        noticeAdapter.notifyDataSetChanged()
+                                        binding.emptyView.visibility = View.VISIBLE
+                                    }
+
+                                    override fun onCancelClick() {
+
+                                    }
+                                }).build().show()
+                        }
+                    }
+                }
+            }
+        })
+
     }
 
     override fun initEvent() {
-        binding.titleInclude.leftBackView.setOnClickListener { finish() }
+        binding.leftBackView.setOnClickListener { finish() }
 
         binding.refreshLayout.setOnRefreshListener { refreshLayout ->
             isRefresh = true
